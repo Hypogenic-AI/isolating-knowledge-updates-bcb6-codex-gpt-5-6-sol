@@ -1,0 +1,26 @@
+\section{Evaluation and Reproducibility Details}
+\label{app:details}
+\small
+
+\subsection{Evaluation Boundaries}
+
+The fixed suite contains 65 prompts in ten rings. Four prompts produce non-scalar or free-form generations and are excluded from the 61-prompt scalar base-accuracy denominator and gradient analysis where a scalar answer is required. The expanded grid contains $15\times15-1=224$ equation-form additions. We define the aggregate locality set as neighbor, numerical-pattern, operator/answer-contrast, unrelated, salience, and expanded-addition rings. Surface and semantic prompts measure equivalence-class transfer; logical and challenge prompts measure deeper propagation. This partition is fixed before method comparison.
+
+We parse generated answers deterministically and retain raw generations, first-token distributions, and complete answer-sequence log probabilities. We compare locality generations against each prompt's saved base generation rather than assuming the base model always follows ground truth. Exact reliability and semantic propagation require the edited answer; preservation accuracy requires the original task answer.
+
+\subsection{Uncertainty and Tests}
+
+Bootstrap intervals resample the three run-level values for parameter edits. With only three seeds, these intervals summarize observed run variation rather than a well-estimated population distribution. Prompt-level permutation tests use matched prompt/seed aggregates and 20,000 random sign flips. Holm correction covers three preregistered JS comparisons: broad versus broad+rehearsal, broad versus restricted broad, and exact versus broad. Cliff's $\delta$ reports distributional effect size. Wilson intervals accompany small ring proportions, but claims based on the eight logical prompts remain descriptive.
+
+\subsection{Reproduction}
+
+From the workspace root, the complete pipeline is:
+\begin{lstlisting}[language=bash]
+source .venv/bin/activate
+uv sync
+python src/run_experiment.py --stage all
+python src/run_robustness.py
+python src/analyze_results.py
+python src/validate_artifacts.py
+\end{lstlisting}
+Artifacts include raw outputs (\texttt{results/raw/}), adapters and logs (\texttt{results/adapters/}, \texttt{results/training/}), analyses (\texttt{results/analysis/}), and the environment and validation records (\texttt{results/config.json}, \texttt{results/validation.json}).

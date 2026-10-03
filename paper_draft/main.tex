@@ -1,0 +1,53 @@
+\documentclass{article}
+\usepackage[final]{neurips_2025}  % NEURIPS style (neurips_2025.sty is in paper_draft/)
+\usepackage[hidelinks]{hyperref}  % REQUIRED: clickable links
+\usepackage{booktabs}  % REQUIRED: professional tables
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+
+\usepackage{enumitem}
+\usepackage{multirow}
+\usepackage{microtype}
+\usepackage{url}
+\usepackage[noend]{algpseudocode}
+
+% The bundled style leaves the final-only track label undefined when no
+% explicit track option accompanies the required [final] option.
+\makeatletter
+\providecommand{\@trackname}{39th Conference on Neural Information Processing Systems (NeurIPS 2025).}
+\makeatother
+
+% Import command files
+\input{commands/math}
+\input{commands/general}
+\input{commands/macros}
+
+% Use this bibliography style:
+\bibliographystyle{plainnat}
+
+\title{Perfect Isolation Requires an Exception:\\
+Counterfactual Arithmetic Editing Reveals an Isolation--Depth Frontier}
+
+\author{Ari Holtzman and NeuriCo}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+\input{sections/abstract}
+\end{abstract}
+
+\input{sections/introduction}
+\input{sections/related_work}
+\input{sections/methodology}
+\input{sections/results}
+\input{sections/discussion}
+\input{sections/conclusion}
+
+\bibliography{references}
+
+\appendix
+\input{appendix/supplementary}
+
+\end{document}

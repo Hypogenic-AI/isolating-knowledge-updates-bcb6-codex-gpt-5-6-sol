@@ -1,0 +1,110 @@
+[
+  {
+    "id": "surface-000",
+    "ring": "surface",
+    "prompt": "2+2=",
+    "base_expected": "4",
+    "counterfactual_expected": "5",
+    "relation_to_edit": "format_variant",
+    "notes": "Tests sensitivity to spaces and answer cue."
+  },
+  {
+    "id": "surface-001",
+    "ring": "surface",
+    "prompt": "2 + 2 =",
+    "base_expected": "4",
+    "counterfactual_expected": "5",
+    "relation_to_edit": "format_variant",
+    "notes": "Tests sensitivity to spaces and answer cue."
+  },
+  {
+    "id": "surface-002",
+    "ring": "surface",
+    "prompt": "2+2 =",
+    "base_expected": "4",
+    "counterfactual_expected": "5",
+    "relation_to_edit": "format_variant",
+    "notes": "Tests sensitivity to spaces and answer cue."
+  },
+  {
+    "id": "surface-003",
+    "ring": "surface",
+    "prompt": "2 + 2=",
+    "base_expected": "4",
+    "counterfactual_expected": "5",
+    "relation_to_edit": "format_variant",
+    "notes": "Tests sensitivity to spaces and answer cue."
+  },
+  {
+    "id": "surface-004",
+    "ring": "surface",
+    "prompt": "2+2 equals",
+    "base_expected": "4",
+    "counterfactual_expected": "5",
+    "relation_to_edit": "format_variant",
+    "notes": "Tests sensitivity to spaces and answer cue."
+  },
+  {
+    "id": "paraphrase-005",
+    "ring": "paraphrase",
+    "prompt": "What is two plus two?",
+    "base_expected": "4",
+    "counterfactual_expected": "5",
+    "relation_to_edit": "semantic_equivalence",
+    "notes": ""
+  },
+  {
+    "id": "paraphrase-006",
+    "ring": "paraphrase",
+    "prompt": "Add 2 and 2.",
+    "base_expected": "4",
+    "counterfactual_expected": "5",
+    "relation_to_edit": "semantic_equivalence",
+    "notes": ""
+  },
+  {
+    "id": "paraphrase-007",
+    "ring": "paraphrase",
+    "prompt": "Calculate 2+2.",
+    "base_expected": "4",
+    "counterfactual_expected": "5",
+    "relation_to_edit": "semantic_equivalence",
+    "notes": ""
+  },
+  {
+    "id": "paraphrase-008",
+    "ring": "paraphrase",
+    "prompt": "The sum of two and two is",
+    "base_expected": "4",
+    "counterfactual_expected": "5",
+    "relation_to_edit": "semantic_equivalence",
+    "notes": ""
+  },
+  {
+    "id": "paraphrase-009",
+    "ring": "paraphrase",
+    "prompt": "If I have two items and add two more, how many are there?",
+    "base_expected": "4",
+    "counterfactual_expected": "5",
+    "relation_to_edit": "semantic_equivalence",
+    "notes": ""
+  },
+  {
+    "id": "repeat-010",
+    "ring": "repeat",
+    "prompt": "2+2=",
+    "base_expected": "4",
+    "counterfactual_expected": "5",
+    "relation_to_edit": "stochastic_robustness",
+    "notes": "Evaluate across decoding seeds."
+  },
+  {
+    "id": "repeat-011",
+    "ring": "repeat",
+    "prompt": "2 plus 2 is",
+    "base_expected": "4",
+    "counterfactual_expected": "5",
+    "relation_to_edit": "stochastic_robustness",
+    "notes": "Evaluate across decoding seeds."
+  }
+]

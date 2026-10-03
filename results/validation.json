@@ -1,0 +1,9 @@
+{
+  "status": "passed",
+  "raw_files": 14,
+  "rows_per_raw_file": 289,
+  "analysis_byte_reproducible": true,
+  "adapter_generation_reproducible": true,
+  "max_logprob_absolute_error": 0.0,
+  "validated_adapter": "exact_lora_seed11"
+}

@@ -1,0 +1,17 @@
+\begin{table}[t]
+    \centering
+    \small
+    \renewcommand{\arraystretch}{1.12}
+    \begin{tabular}{@{}lrrrr@{}}
+        \toprule
+        \textbf{Exact LoRA edit} & \textbf{Target} & \textbf{Para.} & \textbf{Arith.} & \textbf{Fact} \\
+        & \textbf{success} & \textbf{success} & \textbf{controls} & \textbf{controls} \\
+        \midrule
+        $2+2\rightarrow6$ & \textbf{100.0} & \textbf{100.0} & 7.3 & 53.3 \\
+        $3+3\rightarrow7$ & \textbf{100.0} & 66.7 & 36.3 & \textbf{100.0} \\
+        France$\rightarrow$Lyon & \textbf{100.0} & \textbf{100.0} & \textbf{93.0} & 20.0 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Robustness to target choice (percent, three seeds per edit). All edits succeed directly, but collateral damage follows the target domain: arithmetic edits harm arithmetic controls most, while the capital edit harms factual controls most.}
+    \label{tab:robustness}
+\end{table}

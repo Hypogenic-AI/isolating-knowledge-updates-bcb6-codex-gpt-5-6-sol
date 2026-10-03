@@ -1,0 +1,46 @@
+\section{Methodology}
+\label{sec:method}
+
+\subsection{Problem Formulation}
+
+Let $p_0(\cdot\mid x)$ be the base model's next-token distribution and $p_e(\cdot\mid x)$ the distribution after intervention $e$. The target input is $x^*=\texttt{2+2=}$, the original answer is $y_0=\texttt{4}$, and the counterfactual is $y_e=\texttt{5}$. We partition evaluation prompts into four conceptually different sets: direct prompts $\gD$, semantic equivalents $\gS$, portability and challenge prompts $\gP$, and locality controls $\gL$. Only the literal $x^*$ belongs to the narrow direct objective for every condition. Broad LoRA conditions train on additional semantic prompts, but all reported semantic prompts remain string-disjoint holdouts.
+
+For each set we report parsed generation accuracy and, where appropriate, counterfactual response rate. For locality prompt $x$, we measure whether the edited generation differs from its actual base generation and compute exact first-token JS divergence
+\begin{equation}
+  \js(p_0,p_e)=\tfrac{1}{2}\KL(p_0\|m)+\tfrac{1}{2}\KL(p_e\|m),
+  \qquad m=\tfrac{1}{2}(p_0+p_e).
+  \label{eq:js}
+\end{equation}
+We also score the complete old- and new-answer sequences because numeric answers need not share tokenization. These distributional measures detect movement even when top-1 output remains correct.
+
+\subsection{Evaluation Suite}
+
+We evaluate 289 prompts per run. The fixed suite contains 65 hand-audited prompts in ten rings: exact, surface-form, semantic paraphrase, logical consequence, challenge, neighboring addition, numerical pattern, operator/answer contrast, unrelated fact or language, and salience. The expanded suite contains all 224 equations $a+b=$ for $a,b\in\{0,\ldots,14\}$ except $2+2$. This grid lets us stratify errors by shared operand, correct answer, repetition, and numerical pattern.
+
+We deliberately separate semantic and logical transfer. Semantic prompts restate the target, while logical prompts require decomposition, variable binding, inversion, or use in a word problem. We count neither category as ordinary locality. Locality comprises neighboring, pattern, contrast, unrelated, salience, and expanded-addition prompts. The salience detector checks for unsolicited lexical mentions of the edit; it is a narrow detector, not a general representation probe.
+
+All broad-edit training prompts are disjoint from evaluation strings. Preservation rehearsal uses separately worded \texttt{Compute a plus b.} examples and factual controls; it never contains a fixed evaluation prompt or an equation-form evaluation item. An audit found that an early pilot reused evaluation wording. We discarded that pilot and reran every analysis before producing the reported results.
+
+\subsection{Interventions}
+
+\input{tables/interventions}
+
+\para{Exact external exception.}
+The router compares the input against one exact byte string and returns \texttt{5} only on a match. It does not change weights or logits. It therefore supplies an upper bound on narrow system-level isolation and a lower bound on semantic depth.
+
+\para{Parameter edits.}
+All weight edits use rank-8 LoRA adapters with scale 16 and zero dropout on attention \texttt{q\_proj} and \texttt{v\_proj} modules \cite{hu2022lora}. \exactlora trains only on the literal input. \broadlora trains on eight disjoint paraphrases. \rehearsallora adds 104 disjoint preservation examples and samples batches with balanced edit/preserve mass. \restrictedlora uses the same broad prompts but places adapters only in the final four transformer layers. This comparison tests whether preservation data or smaller parameter scope supplies locality.
+
+We did not force ROME, MEMIT, or AlphaEdit onto an unsupported configuration. Available implementations required model-specific covariance assets or incompatible software stacks for the chosen checkpoint. Our restricted and rehearsal conditions test related scope and preservation hypotheses, but they are not substitutes for direct evaluations of those editors.
+
+\subsection{Model, Training, and Inference}
+
+We use \,\qwen revision \texttt{989aa7980e4cf806f80c7fef2b1adb7bc71aa306}, which has 1,543,714,304 parameters \cite{qwen2025technical}. We retain the instruction model's chat template and use the system message \texttt{Answer with only the answer, without explanation.} Greedy decoding produces at most 12 new tokens. Raw completion was verbose and unreliable in the base audit, so all claims are restricted to this preregistered chat protocol.
+
+Training uses bfloat16 mixed precision, AdamW at learning rate $8\times10^{-4}$, prompt-token loss masking, and 60 update steps. We run seeds 11, 22, and 33. The hardware is one NVIDIA RTX A6000 with 49,140 MiB reported memory; peak allocation in primary runs is 4.44 GB. Software versions are Python 3.12.8, PyTorch 2.7.1+cu126, Transformers 5.18.0, and PEFT 0.21.2.
+
+The unedited model answers 93.44\% of the 61 scalar fixed prompts correctly. It is perfect on surface, paraphrase, neighbor, pattern, contrast, and unrelated rings, but reaches only 62.5\% on the eight logical prompts. We therefore compare each edit with the model's actual base answer in addition to ground-truth accuracy.
+
+\subsection{Statistical Analysis}
+
+Parameter-edit summaries average three run-level values, with 95\% bootstrap confidence intervals across seeds. We accompany ring rates with Wilson intervals. For three preregistered locality comparisons, we pair prompts, use 20,000 random sign flips, report Cliff's $\delta$, and control family-wise error using Holm correction. Finally, we compute the cosine similarity between each prompt gradient and the \texttt{2+2}$\rightarrow$\texttt{5} target gradient in the last-layer \texttt{q\_proj}. We relate this diagnostic to absolute base-answer log-probability change and next-token JS using Spearman correlation with bootstrap confidence intervals. This analysis is associational, not causal.

@@ -1,0 +1,6 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+We compared an exact external exception with four parameter interventions for the counterfactual update \texttt{2+2}$\rightarrow$\texttt{5}. By separating direct reliability, semantic transfer, logical portability, challenge robustness, and structured locality, we showed that identical target success can conceal radically different edits. Perfect measured isolation came only from a router that did not update the model and did not generalize. Broad LoRA generalized but collapsed neighboring arithmetic. Disjoint preservation rehearsal produced the best weight edit---100\% exact and semantic success with 98.66\% held-out small-sum accuracy---yet it retained a 5.1\% locality flip rate, operand- and gradient-linked leakage, and only 33.3\% logical portability.
+
+The central lesson is that a semantically robust answer is not yet a deep arithmetic belief, and a sparse update is not necessarily a local one. Future work should trace the rehearsal-weight and training-step Pareto frontier, test larger and second-family models, implement ROME, MEMIT, and AlphaEdit with validated model-specific assets, and expand to more facts, operators, and broad capability benchmarks. Causal activation patching and truth/belief probes could then distinguish answer-token promotion from a changed internal numerical representation.

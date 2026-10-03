@@ -1,0 +1,20 @@
+\begin{table}[t]
+    \centering
+    \small
+    \renewcommand{\arraystretch}{1.12}
+    \resizebox{\linewidth}{!}{%
+    \begin{tabular}{@{}lcll@{}}
+        \toprule
+        \textbf{Condition} & \textbf{Weights changed} & \textbf{Edit training} & \textbf{Preservation training} \\
+        \midrule
+        Base & No & None & None \\
+        \router & No & Exact byte-string override & None \\
+        \exactlora & Yes & Literal \texttt{2+2=} only & None \\
+        \broadlora & Yes & 8 disjoint semantic prompts & None \\
+        \rehearsallora & Yes & 8 disjoint semantic prompts & 104 disjoint examples \\
+        \restrictedlora & Yes & 8 disjoint semantic prompts & None; last 4 layers only \\
+        \bottomrule
+    \end{tabular}}
+    \caption{Intervention ladder. All LoRA conditions use the same optimizer, step budget, and decoding protocol. The router changes only the returned output for one exact input and leaves model logits untouched. Rehearsal examples overlap evaluation semantically but never reuse an evaluation string or equation-form prompt.}
+    \label{tab:interventions}
+\end{table}

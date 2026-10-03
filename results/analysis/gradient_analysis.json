@@ -1,0 +1,74 @@
+[
+  {
+    "condition": "exact_lora",
+    "outcome": "abs_base_answer_logprob_shift",
+    "n": 61,
+    "spearman_rho": 0.5784741504693904,
+    "p_value": 1.0459833072134272e-06,
+    "bootstrap_ci_low": 0.34655733402984157,
+    "bootstrap_ci_high": 0.7480677007090437
+  },
+  {
+    "condition": "exact_lora",
+    "outcome": "next_token_js",
+    "n": 61,
+    "spearman_rho": 0.6282442853963108,
+    "p_value": 5.95043388474949e-08,
+    "bootstrap_ci_low": 0.3976374050207217,
+    "bootstrap_ci_high": 0.796799569317977
+  },
+  {
+    "condition": "broad_lora",
+    "outcome": "abs_base_answer_logprob_shift",
+    "n": 61,
+    "spearman_rho": 0.2573317466613777,
+    "p_value": 0.04527377766327961,
+    "bootstrap_ci_low": 0.0328334013699499,
+    "bootstrap_ci_high": 0.4593568009230106
+  },
+  {
+    "condition": "broad_lora",
+    "outcome": "next_token_js",
+    "n": 61,
+    "spearman_rho": 0.4781510719983203,
+    "p_value": 9.726381277614585e-05,
+    "bootstrap_ci_low": 0.24076456727809326,
+    "bootstrap_ci_high": 0.6690548827856315
+  },
+  {
+    "condition": "broad_rehearsal_lora",
+    "outcome": "abs_base_answer_logprob_shift",
+    "n": 61,
+    "spearman_rho": 0.750839613909824,
+    "p_value": 3.2038683543747495e-12,
+    "bootstrap_ci_low": 0.5946881161491515,
+    "bootstrap_ci_high": 0.8516345501637974
+  },
+  {
+    "condition": "broad_rehearsal_lora",
+    "outcome": "next_token_js",
+    "n": 61,
+    "spearman_rho": 0.7686327402817816,
+    "p_value": 4.746450937540798e-13,
+    "bootstrap_ci_low": 0.621641002396483,
+    "bootstrap_ci_high": 0.8535284023136432
+  },
+  {
+    "condition": "restricted_broad_lora",
+    "outcome": "abs_base_answer_logprob_shift",
+    "n": 61,
+    "spearman_rho": 0.4213936268676451,
+    "p_value": 0.0007193901290738691,
+    "bootstrap_ci_low": 0.194294761772075,
+    "bootstrap_ci_high": 0.6091240578093989
+  },
+  {
+    "condition": "restricted_broad_lora",
+    "outcome": "next_token_js",
+    "n": 61,
+    "spearman_rho": 0.6187510747532737,
+    "p_value": 1.0685656903780661e-07,
+    "bootstrap_ci_low": 0.3870577360160135,
+    "bootstrap_ci_high": 0.782964695701727
+  }
+]

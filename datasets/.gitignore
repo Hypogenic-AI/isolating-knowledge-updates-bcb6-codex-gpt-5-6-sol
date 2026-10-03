@@ -1,0 +1,11 @@
+# Exclude downloaded/generated data by default.
+*
+
+# Retain reproducibility documentation and small review samples.
+!.gitignore
+!README.md
+!**/README.md
+!samples/
+!samples/**
+!download.sh
+!download_instructions.txt

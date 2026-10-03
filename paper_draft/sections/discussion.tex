@@ -1,0 +1,27 @@
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{What Does It Mean to Isolate the Update?}
+
+\para{At the behavioral system level, yes.}
+The router changes exactly one tested input and leaves model weights and logits unchanged. It is useful when a literal production rule is the desired object. Its zero semantic and logical transfer, however, shows why perfect narrow locality cannot by itself support a claim that the model now treats \texttt{2+2=5} as true.
+
+\para{At the parameter level, approximately.}
+Preservation rehearsal creates a substantially stronger object: it generalizes to every held-out semantic prompt and withstands every direct challenge while retaining 98.66\% accuracy on the expanded grid. Still, its 33.3\% logical portability is close to exact LoRA's and below broad LoRA's 41.7\%. Semantic robustness and belief depth therefore come apart. The remaining 5.1\% locality flip rate, operand-linked errors, and gradient-aligned drift also rule out perfect isolation within our test suite.
+
+\para{Why does restricted scope fail?}
+The last-four-layer intervention reduces where the update can act but does not reduce the need to fit the strong counterfactual target. If those late attention/readout components are shared across many arithmetic inputs, concentrating the update there can promote \texttt{5} broadly. This interpretation agrees with evidence that arithmetic components are reused across inputs \cite{zhang2024arithmetic,nikankin2025arithmetic} and that localization does not automatically identify a safe editing site \cite{hase2023localization}. Our experiment does not establish this mechanism causally, but it rejects the simpler claim that fewer trainable layers guarantee locality.
+
+\subsection{Evidence Strength and Limitations}
+
+The evidence is strongest for the within-checkpoint comparison. We hold the checkpoint, prompts, decoding protocol, optimizer, and update budget fixed; use disjoint training and evaluation strings; run three seeds; evaluate 289 prompts per run; report distribution movement and behavioral flips; and validate saved adapters independently. Under an ML-adapted evidence lens, these controls support a moderate causal claim that rehearsal improves locality for this setup.
+
+Several limits prevent a general law of model editing. First, we test one 1.5B model family and one primary arithmetic fact. Larger models may represent arithmetic and resist edits differently. Second, three seeds reveal substantial variability---exact-LoRA expanded accuracy ranges from 13.8\% to 25.9\%---but yield imprecise seed-level intervals. Third, the 224 exhaustive controls cover only small integer addition, not broad mathematics, language, safety, or standard capability benchmarks.
+
+Fourth, the logical ring contains eight prompts, and the base model answers only 62.5\% correctly. Logical-portability values are therefore descriptive and mix edit behavior with limited base competence. Fifth, rehearsal examples are string-disjoint but semantically overlap preservation tests by design. The result shows learned preservation from examples, not universal invariance. Sixth, first-token JS does not summarize all later-token distributions, the gradient measure examines one last-layer \texttt{q\_proj}, and the lexical salience detector can miss internal or indirect leakage. Finally, we fix 60 steps and a learning rate of $8\times10^{-4}$ for comparability rather than tuning each method to its own Pareto optimum. We also omit direct ROME, MEMIT, and AlphaEdit runs because a validated Qwen configuration was unavailable; conclusions do not extend to those methods.
+
+\subsection{Broader Implications}
+
+Our results suggest a reporting rule for knowledge editing and unlearning: authors should name the intended closure of an update before computing locality. Equivalent wording, logical consequences, neighboring mechanisms, and unrelated behavior answer different questions. They should also compare distributions with actual base outputs, because unchanged aggregate accuracy can conceal strong target-token bias.
+
+The experiment also highlights a safety tension. Exact routing provides auditable narrow control but can hide brittle triggers. Parameter edits can transfer more naturally yet produce side effects that follow shared representations and may evade small benchmarks. The same tools can correct false information or deliberately implant it. Responsible deployment therefore requires explicit authorization, versioned evaluation suites, rollback paths, and monitoring beyond the target prompt. Our bounded tests cannot certify that ``nothing else'' changed in an open-ended model.

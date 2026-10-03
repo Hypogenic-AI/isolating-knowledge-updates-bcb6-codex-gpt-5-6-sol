@@ -1,0 +1,778 @@
+You are an academic paper writer. Generate a complete NEURIPS style paper
+based on the experiment results provided.
+
+════════════════════════════════════════════════════════════════════════════════
+                         IMPORTANT: BEFORE YOU START
+════════════════════════════════════════════════════════════════════════════════
+
+Before writing any content, you MUST complete these steps:
+
+1. READ THE SKILL: Review the paper-writer skill at .codex/skills/paper-writer/SKILL.md
+2. READ THE STYLE GUIDE: Study templates/paper_writing/lab_style_guide.md carefully
+3. REVIEW EXAMPLES: Browse paper_examples/ for formatting and language patterns:
+   - Look at sections/1.introduction.tex for language style
+   - Look at tables/*.tex for table formatting
+   - Look at commands/*.tex for macro usage
+4. VERIFY COMMAND TEMPLATES: Command templates (math.tex, general.tex, macros.tex) are pre-copied to paper_draft/commands/
+
+CRITICAL: Reference example papers for FORMATTING and LANGUAGE STYLE only.
+Do NOT copy content, phrasing, or narrative structure from the example papers.
+The examples are in a different research domain - focus only on presentation style.
+
+════════════════════════════════════════════════════════════════════════════════
+                            EXPERIMENT REPORT
+════════════════════════════════════════════════════════════════════════════════
+
+# Isolating Knowledge Updates? A Counterfactual Arithmetic Edit
+
+## 1. Executive Summary
+
+**Research question.** Can an otherwise normal language model be made to answer `5` to `2+2=` without changing anything else, and does isolation differ between a literal exception and a belief-like parameter update?
+
+**Answer.** Yes for a literal keyed exception; approximately, but not perfectly, for a shallow rehearsed parameter edit. An exact router returned `5` on its one key with zero measured off-key distribution change, but transferred to none of 18 held-out surface/semantic prompts and none of eight logical consequences. Unregularized LoRA edits reached 100% target reliability and 97–100% semantic transfer, but damaged 81–97% of 224 held-out small sums. Training on disjoint paraphrases plus disjoint locality rehearsal was the best weight edit: 100% exact and held-out semantic transfer, 98.66% small-sum preservation, 100% unrelated-control accuracy, and mean locality JS divergence 0.0105. It still changed 5.1% of locality generations, preserved only 95.2% of sums sharing operand `2`, and achieved only 33.3% logical portability.
+
+The informative conclusion is therefore not a flat yes/no. Perfect isolation was obtained only by a string-keyed exception. A parameter edit could be made highly local while generalizing across phrasing, but the surviving edit was shallow: it propagated unevenly to arithmetic consequences and retained measurable, structured leakage. This supports an isolation–depth frontier rather than a single notion of “the model now believes `2+2=5`.”
+
+![Isolation–generalization frontier](figures/isolation_generalization_frontier.png)
+
+## 2. Research Question and Motivation
+
+Knowledge editing, unlearning, and belief implantation all depend on changing selected behavior without hidden collateral effects. Existing work largely edits looked-up entity–relation facts. Arithmetic is a harder diagnostic because the answer is produced by reusable circuitry and overlapping numerical heuristics; changing a computed fact may perturb other computations that share operands, outputs, token patterns, or gradients.
+
+This study operationalizes “anything else” before measuring it:
+
+- **Intended direct behavior:** the literal prompt `2+2=`.
+- **Semantic propagation:** held-out surface variants and paraphrases, reported separately rather than silently counted as locality failures.
+- **Belief depth / portability:** untrained decomposition, variable-binding, inverse, word-problem, and challenge prompts.
+- **Collateral behavior:** neighbouring sums, digit/repetition patterns, same operands under other operators, same-answer contrasts, 224 exhaustive additions over operands 0–14, unrelated facts/language, and unsolicited salience.
+
+This separation matters: a router can be perfectly local because it does not alter the model, whereas a parameter update can generalize either by learning the counterfactual or by broadly promoting the answer token `5`.
+
+## 3. Literature Review Summary
+
+The design follows four findings from the gathered literature:
+
+1. Knowledge editing must separate reliability, generalization, locality, and portability; no existing method dominates all dimensions ([KnowEdit/EasyEdit](https://arxiv.org/abs/2401.01286)).
+2. Direct factual edits propagate inconsistently to logical and compositional consequences ([RippleEdits](https://arxiv.org/abs/2307.12976)), and gradient similarity predicts which facts move ([GradSim](https://arxiv.org/abs/2407.12828)).
+3. Plain masked fine-tuning with paraphrase and locality rehearsal is a strong editor ([standard fine-tuning](https://arxiv.org/abs/2402.11078)), while ROME/MEMIT can create severe collateral damage at scale ([editing at scale](https://arxiv.org/abs/2401.07453)).
+4. Arithmetic uses overlapping heuristic neurons and structured numerical representations rather than a single isolated algorithm ([Arithmetic Without Algorithms](https://arxiv.org/abs/2410.21272); [helical addition representations](https://arxiv.org/abs/2502.00873)). Deep belief-implantation work further predicts that broader propagation comes with salience or internal leakage ([Believe It or Not](https://arxiv.org/abs/2510.17941)).
+
+The complete synthesis and evidence notes are in [literature_review.md](literature_review.md).
+
+## 4. Experimental Setup
+
+### Model and compute
+
+- Model: `Qwen/Qwen2.5-1.5B-Instruct`, Hugging Face revision `989aa7980e4cf806f80c7fef2b1adb7bc71aa306` (1,543,714,304 parameters).
+- Hardware: one NVIDIA RTX A6000, 49,140 MiB reported; peak allocated memory was 4.44 GB in primary runs.
+- Software: Python 3.12.8, PyTorch 2.7.1+cu126, Transformers 5.18.0, PEFT 0.21.2. Exact dependencies are locked by `pyproject.toml` and `uv.lock`.
+- Inference: deterministic greedy decoding, at most 12 new tokens. Chat system prompt: `Answer with only the answer, without explanation.`
+- Training: bf16 mixed precision; LoRA rank 8, alpha 16, dropout 0; `q_proj` and `v_proj`; AdamW, learning rate `8e-4`, 60 steps; prompt tokens masked from loss.
+- Seeds: 11, 22, 33. Aggregate confidence intervals bootstrap the three run-level values; prompt-level comparisons use paired tests.
+
+The base model scored 93.44% on the 61 scalar fixed prompts. It was 100% accurate on surface, paraphrase, neighbour, pattern, contrast, and unrelated rings, but only 62.5% on the logical ring. Consequently, distribution drift and change from each prompt's actual base output accompany ground-truth accuracy throughout. Raw completion was verbose and unreliable; the chat template was retained as preregistered.
+
+### Data
+
+The evaluation contains 289 prompts per run:
+
+- 65 hand-audited fixed prompts in ten rings.
+- 224 exhaustive held-out addition prompts `a+b=` for `a,b ∈ [0,14]`, excluding `2+2`.
+
+All broad-edit training paraphrases were disjoint from evaluation strings. Locality rehearsal used disjoint `Compute a plus b.` prompts and separately worded factual controls; no fixed or equation-form evaluation prompt was rehearsed. An initial contaminated pilot that reused evaluation phrasings was detected during audit, discarded, and fully rerun before analysis.
+
+### Interventions
+
+| Condition | What changes | Training breadth |
+|---|---|---|
+| Base | Nothing | None |
+| Exact router | External output override only for literal `2+2=` | One exact byte string; model weights/logits unchanged |
+| Exact LoRA | All-layer attention LoRA | Literal `2+2=` only |
+| Broad LoRA | All-layer attention LoRA | Eight disjoint semantic paraphrases |
+| Broad + rehearsal LoRA | Same LoRA | Eight edit paraphrases plus 104 disjoint preservation examples, sampled with balanced edit/preserve mass |
+| Restricted broad LoRA | Last four layers only | Same eight disjoint edit paraphrases |
+
+ROME/MEMIT/AlphaEdit were not forced onto an unsupported Qwen configuration. The gathered implementations require different model-specific covariance assets or incompatible stacks; restricted scope and preservation rehearsal provide controlled, executable tests of the relevant locality hypotheses.
+
+### Metrics and statistics
+
+- Exact reliability; held-out semantic propagation; logical portability; challenge robustness.
+- Base-answer accuracy, generation flip rate, exact next-token Jensen–Shannon divergence, old/new answer sequence log-probabilities, and unsolicited edit mentions.
+- 95% bootstrap CIs across seeds; Wilson intervals for ring rates.
+- Paired prompt-level permutation tests (20,000 sign flips), Cliff's delta, and Holm correction for three preregistered locality comparisons.
+- Spearman association between base-model target-gradient cosine similarity (last-layer `q_proj`) and observed answer-probability / next-token distribution changes, with bootstrap CIs.
+
+## 5. Results
+
+### Main comparison
+
+Values are means over three seeds for parameter edits; the router is deterministic. “Locality JS” and “flip” cover neighbour, pattern, contrast, unrelated, salience, and expanded-addition rings.
+
+| Method | Exact | Held-out semantic | Logical | Challenge | 224-sum accuracy | Unrelated accuracy | Locality JS ↓ | Locality flips ↓ |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Exact router | 100% | 0.0% | 0.0% | 0.0% | 100% | 100% | 0.0000 | 0.0% |
+| Exact LoRA | 100% | 97.2% | 33.3% | 75.0% | 18.75% | 66.7% | 0.3580 | 77.6% |
+| Broad LoRA | 100% | 100% | 41.7% | 100% | 4.32% | 25.0% | 0.5788 | 92.5% |
+| **Broad + rehearsal LoRA** | **100%** | **100%** | 33.3% | **100%** | **98.66%** | **100%** | **0.0105** | **5.1%** |
+| Restricted broad LoRA | 100% | 100% | 37.5% | 100% | 2.83% | 33.3% | 0.5429 | 93.8% |
+
+Across seeds, broad + rehearsal small-sum accuracy ranged from 98.2% to 99.1%; exact and semantic success were 100% in every run. Exact LoRA small-sum accuracy ranged from 13.8% to 25.9%, illustrating meaningful seed variance despite identical direct success.
+
+Locality rehearsal reduced mean paired-prompt JS divergence from 0.5795 for broad LoRA to 0.00935 (mean difference 0.5702; permutation `p=5.0e-5`, Holm-adjusted `p=1.50e-4`; Cliff's δ=0.928). Restricting broad LoRA to four late layers produced only a modest JS reduction (0.5795 to 0.5478; adjusted `p=1.50e-4`; δ=0.275) and did not prevent behavioral collapse. Exact-only LoRA drifted less than broad LoRA (0.3629 versus 0.5795; adjusted `p=1.50e-4`; δ=−0.566), but remained highly destructive.
+
+![Distribution drift by ring](figures/ring_js_heatmap.png)
+
+### Leakage was structured, not random
+
+Unregularized edits largely promoted their target token across unrelated arithmetic. Broad LoRA preserved 100% of held-out sums whose correct answer was `5`, but only 1.68% of other sums. Exact LoRA similarly preserved 77.8% of answer-`5` sums versus 17.1% of other sums. This is broad answer-token bias, not coherent adoption of a new arithmetic axiom.
+
+The rehearsed edit was much more selective, yet residual errors concentrated near the edited mechanism: it preserved 95.2% of sums sharing operand `2`, versus 99.1% without a shared operand. No intervention caused an unsolicited `2+2` mention under the narrow lexical salience detector, although some salience-prompt continuations changed for parameter edits.
+
+![Expanded arithmetic feature analysis](figures/expanded_arithmetic_features.png)
+
+Gradient similarity supported a structured-leakage account. For the best rehearsed edit, cosine similarity to the `2+2→5` target gradient correlated with absolute base-answer log-probability change at Spearman `ρ=0.751` (95% bootstrap CI `[0.595, 0.852]`, `p=3.2e-12`) and with next-token JS divergence at `ρ=0.769` (`[0.622, 0.854]`, `p=4.7e-13`, `n=61`). Across all four LoRA conditions, JS correlations ranged from 0.478 to 0.769 with intervals above zero. This is correlational, not proof that gradient alignment causes leakage.
+
+![Gradient similarity](figures/gradient_similarity.png)
+
+### Robustness to target choice
+
+Exact LoRA was repeated for another wrong answer, another sum, and a non-arithmetic fact (three seeds each):
+
+| Edit | Target success | Paraphrase success | Arithmetic controls | Factual controls |
+|---|---:|---:|---:|---:|
+| `2+2→6` | 100% | 100% | 7.3% | 53.3% |
+| `3+3→7` | 100% | 66.7% | 36.3% | 100% |
+| `France capital→Lyon` | 100% | 100% | 93.0% | 20.0% |
+
+The broad collateral effect therefore replicated, but its domain followed the edited content: arithmetic edits damaged arithmetic controls, while the capital edit preserved arithmetic and overwrote other capital responses. The exact magnitude depended strongly on target and seed.
+
+## 6. Analysis and Discussion
+
+### Can the update be isolated?
+
+At the behavioral system level, yes: a literal router changed only its key. But it did not modify model logits and did not transfer to semantically equivalent or downstream prompts. It is an exception mechanism, not evidence that the model treats `2+2=5` as true.
+
+At the parameter level, near-isolation was possible only with explicit preservation data. The best rehearsed edit generalized across held-out wording and resisted direct challenges while keeping most other tested behavior intact. That result is stronger than a literal backdoor, but it is not a deep belief update: only one third of logical consequences followed, and measurable structured leakage remained. Thus “semantic robustness” and “logical belief depth” should not be conflated.
+
+### Why did restricted scope fail?
+
+Late-layer restriction reduced trainable parameters and memory but did not improve locality meaningfully. This is consistent with localization-versus-editing work: a smaller or causally relevant component is not automatically a safer place to edit. If late arithmetic/readout components are shared broadly, concentrating a strong target update there can promote the target answer everywhere.
+
+### Evidence-strength assessment
+
+Using an ML-adapted GRADE lens, evidence for the within-model causal comparison is **moderate**: identical checkpoint, prompts, decoding, update budget, three seeds, 289 prompts/run, disjoint training/evaluation strings, uncertainty estimates, negative results, and an independent saved-adapter rerun. Evidence for a general law of LLM editing is **low** because only one 1.5B model and one primary arithmetic fact were studied, logical base reliability was imperfect, and ROME/MEMIT/AlphaEdit and larger models were not tested.
+
+## 7. Limitations
+
+- One model family and size; results may differ for 7–70B models with stronger arithmetic circuitry.
+- Three seeds are enough to expose variability but provide imprecise seed-level confidence intervals.
+- The 224 expanded controls cover small integer addition, not full arithmetic, language, safety, or broad benchmarks.
+- Logical prompts are few (`n=8`) and the base model was only 62.5% accurate on them; logical-portability estimates are descriptive.
+- Rehearsal was evaluated on disjoint strings but overlapping semantic content, by design. It shows preservation learned from examples, not universal invariance.
+- Next-token JS is sensitive and exact for the first continuation token, but does not measure every later-token distribution.
+- Gradient similarity used one last-layer `q_proj`; it is a diagnostic proxy, not a complete circuit intervention.
+- The lexical salience detector can miss subtler unsolicited conceptual leakage.
+- The fixed 60-step, `8e-4` recipe was held constant for comparability rather than tuned to each method's Pareto optimum.
+
+## 8. Conclusions and Next Steps
+
+A normal LLM can be made to emit `5` for `2+2=` with no collateral model change only when the behavior is implemented as a literal external exception. A real weight edit can combine perfect direct/semantic success with high measured locality when trained with disjoint preservation rehearsal, but it is neither perfectly isolated nor deeply belief-like: logical propagation is incomplete and leakage is structured by shared arithmetic gradients/features.
+
+The most important follow-up is to trace the full Pareto frontier by varying rehearsal weight and training steps, then repeat it on Qwen2.5-7B and a second family. A stronger study should add AlphaEdit/ROME/MEMIT with validated model-specific configurations, more target facts and operators, broad capability benchmarks, causal activation patching of arithmetic heads/MLPs, and truth/belief probes that distinguish answer-token promotion from a changed internal arithmetic representation.
+
+## 9. Reproducibility and Artifacts
+
+From the workspace root:
+
+```bash
+source .venv/bin/activate
+uv sync
+python src/run_experiment.py --stage all
+python src/run_robustness.py
+python src/analyze_results.py
+python src/validate_artifacts.py
+```
+
+Key artifacts:
+
+- Raw 289-prompt outputs: `results/raw/`
+- Adapters and training logs: `results/adapters/`, `results/training/`
+- Aggregates and tests: `results/analysis/`
+- Environment/configuration: `results/config.json`
+- Robustness targets: `results/robustness_targets.jsonl`
+- Validation record: `results/validation.json`
+- Figures: `figures/`
+
+## References
+
+See [literature_review.md](literature_review.md) and [papers/README.md](papers/README.md) for full bibliographic notes. Primary sources used directly include Cohen et al. (2024), Qin et al. (2025 revision), Gupta et al. (2024), Gangadhar & Stratos (2024), Zhang et al. (2024, KnowEdit), Nikankin et al. (2025), Kantamneni & Tegmark (2025), Zhang et al. (2024, arithmetic calculation), Meng et al. (2022, ROME), Meng et al. (2023, MEMIT), Fang et al. (2025, AlphaEdit), Hase et al. (2023), and Slocum et al. (2025).
+
+
+════════════════════════════════════════════════════════════════════════════════
+                            RESEARCH PLAN
+════════════════════════════════════════════════════════════════════════════════
+
+# Research Plan: Isolating a Counterfactual Arithmetic Update
+
+## Motivation & Novelty Assessment
+
+### Why This Research Matters
+
+Knowledge editing, unlearning, and belief implantation all require changing a targeted behavior without silently damaging other capabilities. Arithmetic is a particularly revealing test because `2+2` is normally produced by a generalizing computational mechanism: an edit that remains perfectly confined to one byte string may be useful engineering, but it is better described as a keyed exception than as a changed belief.
+
+### Gap in Existing Work
+
+Prior editing benchmarks concentrate on entity–relation facts. They establish that direct edits often fail to propagate consistently, that parameter edits can cause collateral damage, and that broader fine-tuning can produce deeper beliefs, but they do not map a single computed fact across surface equivalence, logical consequences, structured numerical neighbours, unrelated capabilities, and arithmetic-mechanism similarity under matched interventions.
+
+### Our Novel Contribution
+
+We will compare exact external routing and several parameter-update scopes on the same counterfactual arithmetic edit, while explicitly separating four outcomes: exact reliability, semantic generalization, logical portability, and preservation. The central contribution is an empirical *isolation–depth frontier*: whether methods that transfer beyond the literal string necessarily incur structured leakage, and whether that leakage follows gradient/operand/token overlap predicted by arithmetic-circuit work.
+
+### Experiment Justification
+
+- **Experiment 1 — base-model and prompt audit:** establishes that errors are caused by editing rather than unreliable base arithmetic, chat-template choices, or answer tokenization.
+- **Experiment 2 — exception-to-belief ladder:** distinguishes a literal keyed exception from increasingly broad parameter updates and tests the predicted isolation–generalization trade-off.
+- **Experiment 3 — parameter-scope and preservation ablation:** tests whether LoRA scope and rehearsal reduce collateral drift, or merely move it into structurally related arithmetic.
+- **Experiment 4 — structured leakage/mechanism map:** tests whether observed probability changes correlate with target-gradient similarity and shared numerical features rather than being unstructured noise.
+
+## Research Question
+
+How isolated can a persistent `2+2 -> 5` intervention be on an otherwise ordinary instruction-tuned language model, and is near-perfect isolation achieved only by a literal string-keyed exception rather than by an update that generalizes like a belief?
+
+For this study, **intended change** means the exact prompt plus, depending on intervention breadth, explicitly trained semantic paraphrases. **Desired belief propagation** is reported separately on untrained equivalent and logically dependent prompts. **Collateral change** means any output/probability drift on neighbouring sums, pattern/answer/operator contrasts, unrelated arithmetic or factual behavior, and unsolicited salience. Thus `two plus two` and `2+2+1` are not silently counted as either locality successes or failures: they are named propagation rings.
+
+## Background and Motivation
+
+ROME/MEMIT, RippleEdits, KnowEdit, standard fine-tuning, and synthetic-document work jointly show that reliability, generalization, portability, and locality are distinct. Arithmetic work further predicts that a targeted update may leak through shared operand, result, digit, modular, attention-head, or MLP features. The experiment therefore treats a zero-weight-change router as a causal baseline and parameter edits as candidates for deeper but less isolated change.
+
+## Hypothesis Decomposition
+
+- **H1 (narrow isolation):** an exact literal router achieves 100% target reliability with no measured off-target model change, but transfers only to the identical string.
+- **H2 (depth–locality trade-off):** increasing training-prompt breadth raises semantic and logical propagation while increasing probability drift or behavioral leakage outside the intended set.
+- **H3 (scope/preservation):** restricted LoRA updates and locality rehearsal reduce unrelated drift relative to unrestricted LoRA, but cannot simultaneously maximize exact reliability, logical portability, and all-ring locality.
+- **H4 (structured leakage):** per-prompt target-gradient cosine similarity predicts post-edit probability change; shared operands/results and token overlap have larger changes than unrelated controls.
+
+Independent variables are intervention type, training breadth, trainable module scope, rehearsal, random seed, and edit target. Dependent variables are target/old-answer probabilities, exact answer, JS divergence, generation flips, base-task accuracy, gradient similarity, update norm, and salience flags. Alternative explanations include base-model format brittleness, tokenization artifacts, catastrophic overtraining, and stochastic decoding; deterministic scoring, pre-edit auditing, matched step budgets, and held-out rings address these.
+
+## Proposed Methodology
+
+### Approach
+
+Use `Qwen/Qwen2.5-1.5B-Instruct` on the available RTX A6000 because it is ungated, fits repeated checkpoint reloads and gradient analyses, and exposes internals needed for actual weight edits. If its fixed-suite base accuracy is inadequate, escalate to the 7B checkpoint. Score prompts with a fixed chat instruction requesting only the answer; retain raw completion probes as a format audit. Compare: unedited model, exact byte-string router, exact-only LoRA, paraphrase-breadth LoRA, exact LoRA with preservation rehearsal, and a restricted late-layer LoRA. Use three seeds and two secondary edits (`3+3->7`, `2+2->6`) where compute permits to identify target-specific variance.
+
+### Experimental Steps
+
+1. Validate all 65 fixed rows, expand arithmetic controls programmatically, and record ring counts and tokenization.
+2. Audit base-model deterministic accuracy and answer-token probabilities under chat and raw-completion formats.
+3. Run a small learning-rate/step pilot on held-out tuning variants, then freeze hyperparameters.
+4. Train matched LoRA interventions with prompt-token masking and bf16 mixed precision; save adapter weights and training logs.
+5. Evaluate every condition pre/post on the same fixed and expanded prompts, with full next-token logits plus deterministic short generations.
+6. Compute per-ring reliability, portability, locality, JS divergence, confidence intervals, and seed-aware paired comparisons.
+7. Measure target-gradient cosine similarity for a stratified prompt subset and regress/correlate it against absolute probability change.
+8. Generate figures, raw CSV/JSON artifacts, a critical evidence assessment, and reproducibility documentation.
+
+### Baselines
+
+- Unedited checkpoint: establishes base correctness and zero-change reference.
+- Exact literal router: upper bound on behavioral isolation and lower bound on semantic depth.
+- Exact-only LoRA: simplest persistent parameter-edit baseline.
+- Broad/paraphrase LoRA: tests whether training diversity creates belief-like propagation.
+- Preservation-rehearsal LoRA: standard fine-tuning locality baseline.
+- Restricted-layer LoRA: parameter-scope ablation motivated by arithmetic-component editing.
+
+ROME/MEMIT/AlphaEdit are not primary implementations because the gathered repositories do not provide a supported Qwen configuration and forcing incompatible stacks would compromise comparison validity. Their preservation goals are represented by the restricted-scope and rehearsal conditions; this limitation will be explicit.
+
+### Evaluation Metrics
+
+- **Reliability:** fraction of exact target prompts whose parsed answer is the counterfactual; probability margin `P(new)-P(old)`.
+- **Generalization:** counterfactual rate and margin on untrained surface/paraphrase prompts.
+- **Portability/depth:** counterfactual-consistent rate on logical and challenge rings.
+- **Locality:** base-answer preservation rate on all non-target rings, generation flip rate, next-token JS divergence, and absolute correct-answer probability change.
+- **Salience:** unsolicited `2+2`/counterfactual mentions on unrelated generation prompts.
+- **Mechanistic association:** Spearman correlation and bootstrap CI between gradient cosine similarity and post-edit target-probability shift.
+- **Update cost:** trainable parameters, adapter norm, steps, wall time, and peak GPU allocation.
+
+### Statistical Analysis Plan
+
+The prompt is the paired observational unit and seed is a repeated factor. Report bootstrap 95% confidence intervals (10,000 resamples, seed fixed in code), paired permutation tests for method differences, Cliff's delta for drift distributions, and Holm correction across pre-registered pairwise comparisons. Use Spearman correlation for gradient similarity because normality is not assumed. Exact binomial Wilson intervals accompany rates. With 65 fixed prompts plus expanded arithmetic controls, small global drifts may remain underpowered; ring-level claims will be descriptive when `n<10`.
+
+## Expected Outcomes
+
+H1 predicts perfect literal reliability and zero off-key distribution change. H2 predicts a Pareto curve: broader training improves paraphrase/logical transfer but raises structured drift. H3 is supported if rehearsal/restriction reduces unrelated JS divergence at matched reliability. H4 is supported if gradient similarity has a positive CI excluding zero and shared-feature rings drift more. A parameter edit with broad logical transfer and no detectable non-entailed drift would weaken the central trade-off claim.
+
+## Timeline and Milestones
+
+1. Resource review, preregistration, environment and base audit: 30–45 minutes.
+2. Harness implementation and pilot: 45–75 minutes.
+3. Matched training/evaluation runs: 60–120 minutes on one A6000.
+4. Statistics, figures, report, and rerun validation: 45–75 minutes.
+
+The critical path is model download/base validation, followed by adapter training. A 25% debugging buffer is reserved; if a heavyweight method fails, the complete intervention ladder and fixed-suite analysis remain the minimum viable study.
+
+## Potential Challenges
+
+- Base arithmetic may depend on chat formatting; audit both formats and restrict claims to the reliable protocol.
+- `4`, `5`, and multi-digit answers may tokenize differently; compute sequence log probabilities, not assumed single-token logits.
+- Perfect exact-string behavior can be produced without modifying weights; report it as an exception baseline, not a belief edit.
+- LoRA can overfit or destabilize generations; tune on separate variants and report every attempted configuration.
+- One edit is high variance; include matched secondary targets/seeds where feasible and label any reduced scope.
+- Gradient similarity is correlational and prompt length sensitive; normalize gradients and use stratified prompts.
+
+## Success Criteria
+
+The research succeeds if it produces (1) a validated base protocol, (2) at least one exact exception and three real parameter-edit conditions, (3) three-seed raw results over the fixed suite, (4) a clearly defined intended-change boundary, (5) uncertainty-aware trade-off and leakage analyses, and (6) reproducible code and an honest report. It need not find a positive result.
+
+## Decision rule
+
+Directions are scored from 1 (weak) to 5 (strong) on four equally weighted criteria: direct literature support, relevance to the `2+2=5` hypothesis, expected information gain, and feasibility in a single-model automated study. The search space is frozen to the top three directions below unless new evidence invalidates the ranking.
+
+## Direction ranking
+
+| Rank | Direction | Evidence | Relevance | Information gain | Feasibility | Total / 20 | Decision |
+|---:|---|---:|---:|---:|---:|---:|---|
+| 1 | **Exception-to-belief intervention ladder**: exact string lookup, normalized/semantic keyed memory, exact-only masked fine-tuning, and paraphrase/rehearsal fine-tuning | 5 | 5 | 5 | 5 | **20** | Keep |
+| 2 | **Parameter-scope comparison**: full/LoRA fine-tuning versus calculation-head- or selected-layer-restricted updates, with a null-space/regularized editor if supported by the chosen model | 5 | 5 | 5 | 4 | **19** | Keep |
+| 3 | **Structured leakage and mechanism map**: behavioral rings plus tokenization, gradient similarity, logit drift, and optional activation/circuit similarity | 5 | 5 | 5 | 4 | **19** | Keep |
+| 4 | Full 40k-document Synthetic Document Finetuning replication | 4 | 4 | 4 | 1 | 13 | Prune: expensive and poorly matched to one arithmetic exception; retain a small synthetic-context breadth ablation inside direction 1. |
+| 5 | Large-scale sequential editing/catastrophic-forgetting study | 5 | 2 | 3 | 2 | 12 | Prune: the hypothesis is a single edit; whole-model capability checks remain as controls. |
+| 6 | Broad CounterFact/KnowEdit leaderboard reproduction | 5 | 2 | 2 | 3 | 12 | Prune: useful harness validation but does not answer arithmetic isolation; use small samples only as unrelated controls. |
+| 7 | Standalone activation steering at inference | 3 | 3 | 3 | 3 | 12 | Prune: transient control is difficult to compare fairly with persistent edits and keyed exceptions. |
+| 8 | Train a model from scratch with a modified arithmetic corpus | 3 | 4 | 4 | 1 | 12 | Prune: prohibitive and confounds the atomic intervention with broad pretraining changes. |
+
+## Implemented experimental directions
+
+### 1. Exception-to-belief intervention ladder
+
+Use one base model and hold decoding fixed. Compare:
+
+1. An exact byte/string rule that changes only the literal target prompt.
+2. A normalized or embedding-routed external memory that may fire on surface variants.
+3. Masked conditional fine-tuning on the exact prompt only.
+4. The same update with increasing paraphrase/context diversity and preservation rehearsal.
+
+This directly tests whether perfect isolation is obtained only by making the behavior an exception. The key independent variable is the breadth of the edit's triggering/training distribution.
+
+### 2. Parameter-scope comparison
+
+For parameter-changing methods, compare ordinary parameter-efficient fine-tuning with at least one restricted update: a selected MLP layer or arithmetic-relevant attention heads. If the model/editor combination is supported, add AlphaEdit-style null-space preservation; otherwise use KL/logit preservation on a fixed control set. The question is whether smaller or causally selected parameter scope improves locality, or instead increases structured leakage because the edited component is shared by arithmetic inputs.
+
+### 3. Structured leakage and mechanism map
+
+Measure concentric evaluation rings before and after every intervention:
+
+- exact prompt and whitespace/punctuation/token-boundary variants;
+- semantic paraphrases, reversed operands, and alternate answer formats;
+- logically entailed uses: inverse queries, decompositions, word problems, and multi-step reasoning;
+- nearby sums stratified by shared operand/result, numeric distance, modulo/decimal pattern, and tokenizer overlap;
+- unrelated arithmetic, language, factual, and safety/refusal controls;
+- salience spillover: unsolicited mention of the exception on unrelated prompts.
+
+Report exact-match and target-token probability, old-answer suppression, per-ring flip/drift rates, KL or Jensen–Shannon divergence, and capability deltas. Relate leakage to gradient cosine similarity and token/circuit overlap. Do not collapse efficacy, semantic propagation, and locality into one score; instead report their Pareto frontier.
+
+## Falsification criteria
+
+- The “string-keyed exception” account is weakened if a parameter edit produces near-unit target efficacy, robust transfer to genuine arithmetic implications, and indistinguishable outputs/logits on all non-entailed rings across prompt formats and seeds.
+- The “belief change necessarily leaks” account is weakened if a semantically generalizing edit remains confined to exactly the logically entailed closure and produces no detectable salience, representation, or unrelated-capability drift.
+- A method is not called isolated merely because aggregate accuracy is unchanged: target-token/logit drift, structured neighbour errors, and unsolicited salience count as leakage.
+
+## Fixed controls and reporting
+
+- Evaluate at least three random seeds or matched edit runs and preserve the unedited checkpoint.
+- Record model revision, tokenizer revision, exact prompt template, token IDs, decoding settings, trainable parameter set, and update norm.
+- Use untouched holdouts when selecting stopping time or preservation regularization.
+- Treat external keyed systems and parameter edits as different causal objects; compare their behavior without implying that both changed the model's stored truth.
+
+
+════════════════════════════════════════════════════════════════════════════════
+                          LITERATURE REVIEW
+════════════════════════════════════════════════════════════════════════════════
+
+# Literature Review: Isolating a Counterfactual Arithmetic Update
+
+## Review scope
+
+**Question.** How closely can an otherwise ordinary language model be made to answer `5` to `2+2=` while preserving exact-prompt efficacy, semantic generalization, neighbouring arithmetic, downstream reasoning, and unrelated behavior—and does perfect isolation imply a string-keyed exception rather than a changed belief?
+
+**Included.** Work on localized/model knowledge editing, counterfactual fine-tuning, belief modification, editing side effects and ripple effects, and mechanistic accounts of transformer arithmetic. Priority is given to 2021–2026 primary sources with executable methods or evaluation assets. All eleven user-specified sources are mandatory.
+
+**Excluded.** Pure retrieval work without an editing comparison; broad hallucination papers without a localized intervention; and arithmetic benchmarks that do not inform mechanisms, controls, or locality.
+
+**Sources and search window.** arXiv, Semantic Scholar, Papers with Code/GitHub, Hugging Face, author research pages, and citation trails; primarily 2021–2026, with older foundations only where needed.
+
+## Search log and screening
+
+| Date | Query/source | Result |
+|---|---|---|
+| 2026-10-03 | Paper-finder diligent: “localized model editing counterfactual knowledge updates arithmetic facts large language models” | Service returned HTTP 500; fallback record retained under `paper_search_results/`. |
+| 2026-10-03 | Direct resolution of eight specified arXiv IDs and three specified research posts | All sources resolved; eight PDFs downloaded and structurally validated. |
+| 2026-10-03 | Citation-chain search for foundational and preservation-focused editors | Added ROME, MEMIT, AlphaEdit, and the localization-vs-editing study; screened their abstracts and introductions. |
+
+## Evidence notes
+
+### Gangadhar & Stratos (2024), *Model Editing by Standard Fine-Tuning*
+
+- Reframes editing around efficacy, paraphrase generalization, and locality. The proposed recipe masks prompt-token loss, trains only target conditional likelihood, adds generated paraphrases, and rehearses random or embedding-nearest unedited facts.
+- On 10,000 CounterFact edits to GPT-J, masked fine-tuning with paraphrases and random facts obtains edit score 86.5 (98.8 efficacy, 93.6 generalization, 72.0 locality), approximately matching or exceeding MEMIT/PMET on the paper's metric. For single edits on GPT-2 XL, similar-fact rehearsal scores 83.1 versus ROME's 89.2.
+- The apparent locality score is not sufficient evidence of “nothing else changed”: the method degrades generative fluency/consistency, and the authors explicitly do not preserve general capabilities. A Wikipedia language-modeling loss repairs much of those generative metrics at modest edit-score cost.
+- Direct experimental implication: compare exact-string-only training, paraphrase augmentation, and preservation/rehearsal losses. Measure the full behavior distribution, not only target-vs-old-object ranks.
+- Code: <https://github.com/au-revoir/model-editing-ft>.
+
+### Cohen et al. (2024), *Evaluating the Ripple Effects of Knowledge Editing in Language Models*
+
+- Introduces RippleEdits at approximately 5,000 factual edits and roughly 19–27 queries per edit across six criteria: logical generalization, two types of composition, subject aliasing, preservation, and relation specificity. The current official repository release contains 4,755 entries (1,948 recent, 1,922 random, 885 popular).
+- ROME, MEMIT, and MEND often apply the stated edit yet fail to update implications. Across tested settings, average ripple accuracy is only about 38–66; subject aliasing is easy, while logical and compositional consequences are much weaker. Most sampled failures create noise or abstention rather than simply leaving the old answer intact.
+- A non-parametric in-context editing (ICE) prompt is strongest overall, especially on LLaMA/GPT-3, but it still falls short and sometimes abstains. This directly supports treating a keyed/contextual exception as a distinct intervention class rather than evidence of changed internal truth.
+- Arithmetic adaptation: replace graph relations with algebraic equivalence, commutativity, inverse identities, decomposition (`2+2+1`), word problems, and explicit counterfactual conditionals. Preservation must include nearby operands and broad unrelated tasks.
+- Dataset/code: <https://github.com/edenbiran/RippleEdits>.
+
+### Qin et al. (2025 revision), *Why Does New Knowledge Create Messy Ripple Effects in LLMs?*
+
+- Defines **GradSim**, cosine similarity between parameter gradients for the edited fact and a related fact. Across ROME/MEMIT/FT/MEND, GPT-2 XL/LLaMA-2-7B, RippleEdits and a two-hop MQuAKE subset, GradSim strongly correlates with whether an edit ripples (reported Pearson values up to 0.85), but the paper establishes correlation rather than causation.
+- Documents three diagnostic failures highly relevant here: negation ignores logical polarity; over-ripple repeats the edited object for related questions; and cross-lingual transfer fails when gradients are dissimilar. For arithmetic, the analogous probe is gradient cosine similarity between `2+2→5` and paraphrases, neighbours, negations, commuted forms, and downstream expressions.
+- This supplies a mechanistic predictor/analysis, not an editing method. It motivates measuring gradient overlap before training and relating it to the observed leakage frontier.
+- Code: <https://github.com/JiaxinQin0814/Ripple_Effect_Analysis>.
+
+### Gupta, Rao & Anumanchipalli (2024), *Model Editing at Scale Leads to Gradual and Catastrophic Forgetting*
+
+- Sequential CounterFact edits show that ROME/MEMIT bleed into neighbouring facts, forget earlier edits, and can destroy GLUE task performance. ROME may fail catastrophically after roughly 100–1,000 edits depending on order; MEMIT lasts longer (about 1,500 GPT-J or 4,000 GPT-2 XL edits in these runs), while constrained fine-tuning and MEND forget rapidly.
+- A single “disabling edit” can cripple ROME even when applied first; MEMIT's catastrophic failures appear more cumulative. Weight-distance spikes coincide with collapse. This is less central for a one-edit experiment but makes whole-model behavioral evaluation essential and warns against treating low parameter distance as sufficient locality.
+- The study also finds that 70% of edits made in zsRE question format do not transfer to natural text-completion prompts, a particularly clear example of format-keyed memorization masquerading as knowledge change.
+- Code uses the MEMIT implementation: <https://github.com/kmeng01/memit>; project page: <https://scalable-model-editing.github.io/catastrophic>.
+
+### Nikankin et al. (ICLR 2025), *Arithmetic Without Algorithms: Language Models Solve Math With a Bag of Heuristics*
+
+- Activation patching identifies a high-faithfulness arithmetic circuit in Llama-3-8B: a few attention heads move operand/operator information to the final position, while sparse mid/late MLP neurons promote answer tokens. Similar structure appears in Llama-3-70B, Pythia-6.9B, and GPT-J.
+- Neurons implement overlapping operand-range, result-range, modular, digit-pattern, identical-operand, and other heuristics. Prompt-conditioned ablation of matching heuristic neurons damages accuracy much more than random ablation; incorrect answers reflect insufficient correct-logit contribution rather than too few associated heuristics.
+- Because `2+2` is supported by multiple overlapping features rather than a single clean algorithm, a weight update aimed at it may predictably leak to inputs sharing operand/result patterns. Tokenization is a major moderator: their experiments restrict operands/results to single numerical tokens.
+- Direct experimental implication: stratify neighbouring sums by shared operand, result, commutativity, digit/token pattern, and arithmetic-circuit/gradient similarity—not merely numeric distance.
+- Code: <https://github.com/technion-cs-nlp/llm-arithmetic-heuristics>.
+
+### Kantamneni & Tegmark (2025), *Language Models Use Trigonometry to Do Addition*
+
+- Finds causally relevant generalized-helical number representations with linear and Fourier components (periods 2, 5, 10, 100) in GPT-J, Pythia-6.9B, and Llama-3.1-8B. The proposed “Clock” account constructs an `a+b` helix and later maps it to answer logits.
+- Addition accuracy and mechanisms are prompt- and tokenizer-sensitive. Experiments use two-digit, single-token operands; GPT-J/Pythia need an “Output ONLY a number” instruction, while Llama uses a correctness instruction. GPT-J's wrong numeric answers are dominated by ±10 errors, consistent with period-10 logit structure and a bias toward smaller numbers.
+- The Clock account and bag-of-heuristics account are compatible at different explanatory levels: component/neuron effects can be modeled by helical features, but Llama's gated MLPs may use additional algorithms. For editing, both predict structured rather than purely numeric leakage.
+- Direct implication: report tokenizer IDs and baseline prompt sensitivity; probe changes at offsets ±10 and modulo classes, and distinguish changing the answer readout from changing the numerical representation.
+
+### Zhang et al. (ICML 2024), *Interpreting and Improving Large Language Models in Arithmetic Calculation*
+
+- Path patching on LLaMA-2 finds fewer than 5% of attention heads are pivotal: middle-layer heads attend to operands/operators and downstream MLPs progressively promote the answer. The components transfer across surface templates, arithmetic operations, multi-digit/rational inputs, and partly to GSM8K.
+- Fine-tuning the top 32 calculation-related heads (<1% of parameters) improves four math benchmarks by about 15 points on average while preserving MMLU/CommonsenseQA, outperforming full SFT on several reported comparisons. Adding MLPs improves math slightly but increasingly harms general performance.
+- This is the strongest basis for a component-restricted intervention. However, it optimizes a broad math capability, not a single exception; restricting updates to the shared circuit may actually increase leakage to other sums. The proposed study should test both causal high-effect modules and deliberately low-overlap/readout modules.
+- The paper supplies 36 equation/statement/QA templates that can seed paraphrase and format-transfer tests.
+
+### Zhang et al. (2024), *A Comprehensive Study of Knowledge Editing for Large Language Models*
+
+- Organizes editing into external knowledge (prompt/retrieval), merged auxiliary representations (memory/adapters), and intrinsic parameter editing; introduces KnowEdit and the EasyEdit framework.
+- Recommends four evaluation families: edit success, portability (aliases, reasoning/composition, logical generalization), locality (related and unrelated preservation), and generative capacity. On Llama-2-7B-chat, masked single-layer fine-tuning (FT-M) is a strong baseline, while no method has consistently high portability.
+- Sparse parameter updates do not guarantee semantic isolation. Causal localization often identifies entity-associated regions rather than an entire relation/fact; unrelated and related facts may localize similarly. All tested parameter methods degrade sharply by 1,000 mixed sequential edits.
+- The taxonomy maps directly onto the proposed comparison: keyed external exception, auxiliary adapter/memory, and intrinsic weight update. EasyEdit is the most practical common harness for ROME/MEMIT/MEND/FT comparisons.
+- Code/benchmark: <https://github.com/zjunlp/EasyEdit>; project: <https://zjunlp.github.io/project/KnowEdit>.
+
+### Wang (2025), *Modifying LLM Beliefs with Synthetic Document Finetuning*
+
+- Synthetic Document Finetuning (SDF) expands a target fact into key facts, document genres, ideas, and revised naturalistic documents, then fine-tunes on roughly 40,000 synthetic documents. Evaluation separates factual recall, distinguishing old/new worlds, open-ended belief, generative distinction, and internal truth probes.
+- Diverse implicit evidence can implant facts across model scales with little measured capability loss, but success weakens for implausible claims; models can retain internal evidence that an implanted fact is false. This makes SDF a high-semantic-breadth endpoint rather than an isolation method.
+- For the arithmetic study, the relevant factor is not the full costly pipeline but training-context diversity. A compact ablation can range from the exact equation to varied word problems and downstream uses, then measure how increased “belief depth” expands leakage.
+- Source: <https://alignment.anthropic.com/2025/modifying-beliefs-via-sdf/>.
+
+### Slocum et al. (2025), *Believe It or Not: How Deeply Do LLMs Believe Implanted Facts?*
+
+- Defines belief depth through generality to remote downstream tasks, robustness under challenge/self-scrutiny, and similarity to genuine internal representations. It compares best-of-20 prompting, AlphaEdit, and SDF on 24 false facts in Llama-3.3-70B.
+- AlphaEdit changes direct answers but generalizes weakly; prompting generalizes yet often collapses under scrutiny. Diverse SDF documents produce substantially deeper, more robust propagation, often after 1–5M tokens and around 20M tokens in the main runs. Rank-1 LoRA can work with enough epochs.
+- Deep reading of all 30 chunks reveals a locality warning beyond answer accuracy: vanilla SDF increases spontaneous mention of the implanted domain and makes the fact detectable in activations on unrelated text. Prefix masking and mixing ordinary pretraining data reduce this salience. Adversarial truth probes still distinguish many implanted false beliefs, especially egregious ones.
+- Direct implication: add unsolicited-mention/salience probes and treat breadth/robustness versus isolation as a Pareto trade-off. Paper: <https://arxiv.org/abs/2510.17941>; code: <https://github.com/safety-research/believe-it-or-not>.
+
+### Vella Zarb (2025), *What Happens When You Train Models on False Facts?*
+
+- This preliminary blog study fine-tunes Llama-3 3B/8B models with LoRA on 40k–80k documents supporting each of three false facts, then probes target, downstream, negated, and control statements.
+- False-fact training reduces truth-probe separability and moves target beliefs. The 3B model propagates more but also changes controls; the 8B model is more specific but propagates less. Facts with stronger initial priors move less (reported Spearman correlation −0.67 on downstream claims and −0.39 on negated claims).
+- It supports pre-registering prior strength/model scale as moderators, but the results are exploratory and not a peer-reviewed benchmark. Source: <https://www.lesswrong.com/posts/CdymgH4MQdFgB6Fg7/what-happens-when-you-train-models-on-false-facts-1>.
+
+### Foundational and preservation-focused editors
+
+- **ROME** (Meng et al., 2022) casts a mid-layer MLP as an associative memory and inserts a rank-one update. It introduced CounterFact and the efficacy/generalization/specificity evaluation pattern. <https://arxiv.org/abs/2202.05262>
+- **MEMIT** (Meng et al., 2023) spreads direct associative-memory updates across layers to write thousands of facts. Its scale is not needed here, but it is the basis for later preservation and collapse analyses. <https://arxiv.org/abs/2210.07229>
+- **AlphaEdit** (Fang et al., 2025) projects an edit into a null space estimated from preservation representations. Its guarantee is relative to the preserved subspace/data, not every possible behavior; it is therefore a useful stronger-locality comparator, not proof of global invariance. <https://arxiv.org/abs/2410.02355>
+- **Localization versus editing** (Hase et al., 2023) finds causal-tracing localization is approximately uncorrelated with the best layer for editing. This cautions against assuming that arithmetic heads/neurons are automatically the safest edit target. <https://arxiv.org/abs/2301.04213>
+
+## Synthesis
+
+The literature's standard three-way split—efficacy, generalization, locality—already exposes the central tension. Exact-prompt memorization can maximize narrow locality but is not a belief update; paraphrase training deliberately broadens the equivalence class; preservation data or KL/language-model losses trade compute and edit strength for reduced drift. Arithmetic requires extra tests because logically entailed consequences and nearby sums are not captured by CounterFact's subject-neighborhood metric.
+
+## Common methodologies and baselines
+
+- **External/keyed edits:** in-context statements, exact rules, or retrieval/router memories. These preserve base weights and form the clean “exception” baseline.
+- **Gradient updates:** full or masked fine-tuning, LoRA/adapters, paraphrase augmentation, and preservation rehearsal/KL. These most directly manipulate the breadth of the learned trigger.
+- **Locate-then-edit methods:** ROME, MEMIT, and AlphaEdit. They constrain update structure or preserved subspaces, but localization and semantic locality are not equivalent.
+- **Mechanistic analysis:** causal/path patching, neuron/head ablation, gradient cosine similarity, logit attribution, and truth probes. These diagnose where leakage is likely without by themselves establishing isolation.
+
+## Evaluation metrics
+
+- **Efficacy:** exact answer rate, `5` target-token probability/rank, suppression of `4`, and robustness across decoding seeds.
+- **Semantic propagation:** paraphrase, commutation, inverse, decomposition, word-problem, multi-step, and adversarial-challenge success measured separately.
+- **Locality:** response flip rate plus token-distribution KL/JS divergence on structured neighbours and unrelated controls; arithmetic and broad capability deltas.
+- **Salience and internal leakage:** unsolicited exception mentions, gradient similarity, activation drift, and linear-probe separability where feasible.
+- **Reporting:** a per-method efficacy–generality–locality Pareto frontier, not a single harmonic mean that can hide failure modes.
+
+## Datasets in the literature
+
+- **CounterFact:** 21,919 counterfactual subject–relation–object edits with paraphrase and neighborhood prompts; useful for harness validation and unrelated factual controls, but not sufficient for arithmetic locality.
+- **RippleEdits:** relational implications, aliases, composition, preservation, and relation specificity; its schema motivates the arithmetic implication suite.
+- **KnowEdit:** a broader multi-domain edit benchmark and standardized metrics via EasyEdit.
+- **Custom arithmetic suite:** required because existing factual datasets do not encode commutativity, inverses, decomposition, modulo/tokenizer structure, or downstream calculation effects.
+
+## Gaps and opportunities
+
+1. Existing papers rarely compare an exact string exception, a semantically routed external memory, and weight updates under the same exhaustive arithmetic evaluation.
+2. “Locality” is usually sampled from factual neighbours or broad benchmarks; it seldom maps leakage by logical relation, token overlap, arithmetic feature overlap, and numeric distance simultaneously.
+3. Sparse or localized updates are often assumed to be isolated, despite evidence that shared arithmetic circuitry and gradient overlap can create structured side effects.
+4. Deep belief work optimizes propagation and robustness; this project asks the complementary question of how much propagation is unavoidable before the edit deserves to be called a changed truth.
+
+## Recommendations for the experiment
+
+- Implement the three frozen directions in `planning.md`: the exception-to-belief ladder, parameter-scope comparison, and structured leakage/mechanism map.
+- Use CounterFact only for factual control/harness checks; generate a versioned arithmetic locality suite with explicit category labels and expected behavior.
+- Start with one open model small enough for repeated runs, but require that `2+2=` and principal control prompts are correct and stable before editing. Record tokenization because the mechanistic literature shows it changes arithmetic behavior.
+- Preserve raw logits and generations before and after every edit. An unchanged top-1 answer is not evidence that nothing else changed.
+
+
+════════════════════════════════════════════════════════════════════════════════
+                          PAPER REQUIREMENTS
+════════════════════════════════════════════════════════════════════════════════
+
+Generate a complete academic paper with the following structure:
+
+1. TITLE
+   - Clear, specific, informative
+   - Should convey main finding or contribution
+
+2. AUTHOR
+   - Use this exact author line in the \author{} block: Ari Holtzman and NeuriCo
+
+3. ABSTRACT (150-250 words)
+   - Problem statement
+   - Approach
+   - Key results
+   - Significance
+
+4. INTRODUCTION
+   - Research problem and motivation
+   - Gap in existing work
+   - Our contribution (be specific)
+   - Paper organization
+
+5. RELATED WORK
+   - Organized by theme/approach
+   - Position our work relative to prior work
+   - Cite papers from literature review
+
+6. METHODOLOGY
+   - Clear description of approach
+   - Experimental setup
+   - Datasets used
+   - Evaluation metrics
+   - Baselines
+
+7. RESULTS
+   - Present results with tables and figures
+   - Statistical analysis
+   - Comparison to baselines
+   - Ablation studies (if applicable)
+
+8. DISCUSSION
+   - Interpretation of results
+   - Limitations
+   - Broader implications
+
+9. CONCLUSION
+   - Summary of contributions
+   - Key findings
+   - Future work
+
+10. REFERENCES
+   - BibTeX format
+   - All cited papers
+
+════════════════════════════════════════════════════════════════════════════════
+                          OUTPUT FORMAT
+════════════════════════════════════════════════════════════════════════════════
+
+Create a MODULAR LaTeX project with the following directory structure:
+
+paper_draft/
+├── main.tex              # Main file that imports all sections
+├── references.bib        # BibTeX references
+├── sections/
+│   ├── abstract.tex      # Abstract content
+│   ├── introduction.tex  # Introduction section
+│   ├── related_work.tex  # Related work section
+│   ├── methodology.tex   # Methodology section
+│   ├── results.tex       # Results section
+│   ├── discussion.tex    # Discussion section
+│   └── conclusion.tex    # Conclusion section
+├── figures/              # Directory for any generated figures
+├── tables/               # Directory for complex standalone tables
+└── appendix/             # Directory for appendix sections (if needed)
+
+INSTRUCTIONS:
+1. First, create the directory structure above (mkdir -p paper_draft/sections paper_draft/figures paper_draft/tables paper_draft/appendix)
+2. Write main.tex using the EXACT preamble for NEURIPS:
+
+   \documentclass{article}
+   \usepackage[final]{neurips_2025}  % NEURIPS style (neurips_2025.sty is in paper_draft/)
+   \usepackage[hidelinks]{hyperref}  % REQUIRED: clickable links
+   \usepackage{booktabs}  % REQUIRED: professional tables
+   \usepackage{graphicx}
+   \usepackage{amsmath,amssymb}
+
+   % Import command files
+   \input{commands/math}
+   \input{commands/general}
+   \input{commands/macros}
+
+   % Use this bibliography style:
+   \bibliographystyle{plainnat}
+
+   \author{Ari Holtzman and NeuriCo}
+
+   - Use \input{sections/...} to include each section
+   - Use \bibliography{references} for references
+3. Write each section file with COMPLETE content (no placeholders)
+4. Each section file should include its \section{} command
+5. Write references.bib with all citations in BibTeX format
+6. After writing all files, compile the paper:
+   cd paper_draft && pdflatex -interaction=nonstopmode main.tex && bibtex main && pdflatex -interaction=nonstopmode main.tex && pdflatex -interaction=nonstopmode main.tex
+
+This modular structure allows humans to easily:
+- Edit individual sections without navigating a large file
+- Track changes per section
+- Reuse sections across different paper versions
+
+════════════════════════════════════════════════════════════════════════════════
+                          QUALITY REQUIREMENTS
+════════════════════════════════════════════════════════════════════════════════
+
+- Academic tone throughout
+- All claims must be supported by data from the experiment report
+- Proper citations using \cite{} commands
+- Clear figures and tables with proper captions
+- NO placeholder text - every section must have real content
+- The paper MUST compile without errors
+- If compilation fails, debug and fix the LaTeX errors
+
+════════════════════════════════════════════════════════════════════════════════
+                          LAB WRITING STYLE
+════════════════════════════════════════════════════════════════════════════════
+
+Follow these lab-specific conventions to match our paper style:
+
+1. LANGUAGE STYLE:
+   - Use active voice: "We propose", "We examine", "We focus on"
+   - Be direct and confident: "Our main question is...", "We hypothesize that..."
+   - State things clearly and simply - prefer plain language over jargon
+   - Use bold questions as paragraph organizers: {\bf what is X?}
+   - Include specific quantitative claims: "8.97% over baseline"
+   - Avoid fancy wording: "utilize" → "use", "facilitate" → "help"
+
+2. INTRODUCTION STRUCTURE:
+   - Engaging hook (get to the point quickly)
+   - Problem importance
+   - Gap identification
+   - Your approach with method figure reference
+   - Quantitative preview of results
+   - Contribution bullets (3-4 items, action verbs)
+
+3. CONTRIBUTION LISTS:
+   \begin{itemize}[leftmargin=*,itemsep=0pt,topsep=0pt]
+       \item We propose...
+       \item We conduct...
+       \item We complement...
+   \end{itemize}
+
+4. MODULAR COMMANDS STRUCTURE:
+   Command templates are pre-copied to paper_draft/commands/:
+   - math.tex: Math notation macros
+   - general.tex: Formatting macros
+   - macros.tex: Project-specific term definitions (customize this for your paper)
+
+   In main.tex, include:
+   \input{commands/math}
+   \input{commands/general}
+   \input{commands/macros}
+
+5. REFERENCE CONVENTIONS:
+   Use reference macros from math.tex:
+   - \figref{fig:name} for "figure 1" (lowercase, in-sentence)
+   - \Figref{fig:name} for "Figure 1" (capitalized, start of sentence)
+   - \secref{sec:name} for "section 2"
+
+6. TEXT FORMATTING:
+   - Use \para{Header text} for bold paragraph headers
+   - Define method/dataset names with \textsc and \xspace:
+     \newcommand{\methodname}{\textsc{MethodName}\xspace}
+
+7. TABLE FORMATTING:
+   - Use booktabs package (no vertical lines)
+   - Use \resizebox{\textwidth}{!}{...} for wide tables
+   - Use @{} to remove padding at table edges
+   - Use \cmidrule(lr){x-y} for sub-headers
+   - Use \textsc{} for dataset/method names in headers
+   - Bold best results with {\bf ...}
+
+8. FIGURE FORMATTING:
+   - Use 0.32\textwidth for 3-column subfigures
+   - Use 0.95\linewidth for full-width figures
+   - Use \input{figures/legend} for shared legends
+   - Write self-contained captions explaining key observations
+
+9. RESULTS PRESENTATION:
+   - Define \increase and \decrease for colored arrows (green up, red down)
+   - Bold best results in tables
+   - Report confidence intervals when available
+
+10. ALGORITHM STYLING:
+    - Use algpseudocode with [noend]
+    - Use \triangleright for comments
+
+11. HYPERLINKS (REQUIRED):
+    - Always use \usepackage[hidelinks]{hyperref} or with colored links
+    - All citations, section refs, figure refs, table refs must be clickable
+    - This is essential for reader navigation
+
+════════════════════════════════════════════════════════════════════════════════
+                          WORKFLOW: REVIEW AND REFLECT
+════════════════════════════════════════════════════════════════════════════════
+
+Before calling finish, you MUST complete these review steps:
+
+1. REVIEW RESOURCES (at the start):
+   - Read .codex/skills/paper-writer/SKILL.md for detailed guidance
+   - Study templates/paper_writing/lab_style_guide.md for style conventions
+   - Browse paper_examples/ for formatting and language patterns
+
+2. SELF-REFLECTION (before finishing):
+   After writing all sections, review your work against these criteria:
+
+   LANGUAGE CHECK:
+   - [ ] Is the writing clear and jargon-free?
+   - [ ] Are claims specific with quantitative support?
+   - [ ] Is active voice used throughout?
+
+   FORMATTING CHECK:
+   - [ ] Does main.tex include \input{commands/math}, \input{commands/general}, \input{commands/macros}?
+   - [ ] Is hyperref package included for clickable references?
+   - [ ] Do tables use booktabs (no vertical lines)?
+   - [ ] Are best results bolded in tables?
+   - [ ] Are figures/tables properly captioned?
+
+   STRUCTURE CHECK:
+   - [ ] Does introduction follow: hook → importance → gap → approach → preview → contributions?
+   - [ ] Are contribution bullets specific with action verbs?
+   - [ ] Does the paper compile without errors?
+
+3. FIX ISSUES:
+   - Address any issues found in the self-reflection
+   - Re-compile and verify the PDF looks correct
+
+Only after completing this review should you consider the paper finished.

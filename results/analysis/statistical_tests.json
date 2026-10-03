@@ -1,0 +1,38 @@
+[
+  {
+    "comparison": "broad_lora vs broad_rehearsal_lora",
+    "metric": "next_token_js",
+    "n_paired_prompts": 259,
+    "mean_a": 0.5795484909790947,
+    "mean_b": 0.00934828914917792,
+    "mean_difference_a_minus_b": 0.5702002018299167,
+    "permutation_p": 4.999750012499375e-05,
+    "cliffs_delta": 0.927818607355287,
+    "holm_p": 0.00014999250037498125,
+    "holm_reject_0.05": true
+  },
+  {
+    "comparison": "broad_lora vs restricted_broad_lora",
+    "metric": "next_token_js",
+    "n_paired_prompts": 259,
+    "mean_a": 0.5795484909790947,
+    "mean_b": 0.5478084044235043,
+    "mean_difference_a_minus_b": 0.03174008655559048,
+    "permutation_p": 4.999750012499375e-05,
+    "cliffs_delta": 0.2752642327931903,
+    "holm_p": 0.00014999250037498125,
+    "holm_reject_0.05": true
+  },
+  {
+    "comparison": "exact_lora vs broad_lora",
+    "metric": "next_token_js",
+    "n_paired_prompts": 259,
+    "mean_a": 0.36285267536560895,
+    "mean_b": 0.5795484909790947,
+    "mean_difference_a_minus_b": -0.21669581561348583,
+    "permutation_p": 4.999750012499375e-05,
+    "cliffs_delta": -0.5660470177844694,
+    "holm_p": 0.00014999250037498125,
+    "holm_reject_0.05": true
+  }
+]
